@@ -1,7 +1,31 @@
 'use client';
 
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
-import { TamagotchiState, TamagotchiAction, Evolution } from '@/types/tamagotchi';
+import { TamagotchiState, TamagotchiAction, Evolution, GameType } from '@/types/tamagotchi';
+
+const INITIAL_ACHIEVEMENTS = [
+  {
+    id: 'first_evolution',
+    name: 'First Evolution',
+    description: 'Evolve your pet for the first time',
+    isUnlocked: false,
+    reward: 100,
+  },
+  {
+    id: 'game_master',
+    name: 'Game Master',
+    description: 'Win 10 mini-games',
+    isUnlocked: false,
+    reward: 200,
+  },
+  {
+    id: 'healthy_pet',
+    name: 'Healthy Pet',
+    description: 'Keep all stats above 80 for 5 minutes',
+    isUnlocked: false,
+    reward: 150,
+  },
+];
 
 const initialState: TamagotchiState = {
   name: 'Tama',
@@ -16,6 +40,14 @@ const initialState: TamagotchiState = {
   lastSlept: new Date(),
   evolution: 'egg',
   experience: 0,
+  achievements: INITIAL_ACHIEVEMENTS,
+  gamesPlayed: 0,
+  highScores: {
+    rockPaperScissors: 0,
+    memoryMatch: 0,
+    quickReflex: 0,
+  },
+  specialAbilities: [],
 };
 
 const TamagotchiContext = createContext<{
@@ -36,14 +68,63 @@ function tamagotchiReducer(state: TamagotchiState, action: TamagotchiAction): Ta
     case 'FEED':
       const feedExp = 10;
       const newFeedExp = state.experience + feedExp;
+      const newEvolution = getEvolutionStage(newFeedExp);
+      
+      // Check for first evolution achievement
+      let updatedAchievements = state.achievements;
+      if (newEvolution !== state.evolution && !state.achievements.find(a => a.id === 'first_evolution')?.isUnlocked) {
+        updatedAchievements = state.achievements.map(a => 
+          a.id === 'first_evolution' ? { ...a, isUnlocked: true } : a
+        );
+      }
+
       return {
         ...state,
         hunger: Math.min(100, state.hunger + 30),
         energy: Math.min(100, state.energy + 10),
         lastFed: new Date(),
         experience: newFeedExp,
-        evolution: getEvolutionStage(newFeedExp),
+        evolution: newEvolution,
+        achievements: updatedAchievements,
       };
+
+    case 'COMPLETE_GAME':
+      const { success, experienceGained, statBoosts } = action.payload;
+      const newGameExp = state.experience + experienceGained;
+      const newGamesPlayed = state.gamesPlayed + 1;
+
+      // Check for game master achievement
+      let gameAchievements = state.achievements;
+      if (newGamesPlayed >= 10 && !state.achievements.find(a => a.id === 'game_master')?.isUnlocked) {
+        gameAchievements = state.achievements.map(a =>
+          a.id === 'game_master' ? { ...a, isUnlocked: true } : a
+        );
+      }
+
+      return {
+        ...state,
+        experience: newGameExp,
+        evolution: getEvolutionStage(newGameExp),
+        gamesPlayed: newGamesPlayed,
+        achievements: gameAchievements,
+        hunger: Math.min(100, state.hunger + (statBoosts.hunger || 0)),
+        happiness: Math.min(100, state.happiness + (statBoosts.happiness || 0)),
+        energy: Math.min(100, state.energy + (statBoosts.energy || 0)),
+        health: Math.min(100, state.health + (statBoosts.health || 0)),
+      };
+
+    case 'UNLOCK_ACHIEVEMENT':
+      const achievement = state.achievements.find(a => a.id === action.payload);
+      if (!achievement || achievement.isUnlocked) return state;
+
+      return {
+        ...state,
+        achievements: state.achievements.map(a =>
+          a.id === action.payload ? { ...a, isUnlocked: true } : a
+        ),
+        experience: state.experience + achievement.reward,
+      };
+
     case 'PLAY':
       const playExp = 20;
       const newPlayExp = state.experience + playExp;
@@ -68,7 +149,21 @@ function tamagotchiReducer(state: TamagotchiState, action: TamagotchiAction): Ta
         evolution: getEvolutionStage(newSleepExp),
       };
     case 'UPDATE_STATUS':
-      const newHealth = Math.max(0, state.health - (state.hunger < 30 || state.happiness < 30 ? 0.5 : 0));
+      // Health decreases faster when hunger or happiness is low
+      const healthPenalty = (state.hunger < 30 ? 2 : 0) + (state.happiness < 30 ? 2 : 0);
+      const baseHealthLoss = 0.3; // Base health loss per second
+      const newHealth = Math.max(0, state.health - (baseHealthLoss + healthPenalty));
+
+      // Check for healthy pet achievement
+      let healthAchievements = state.achievements;
+      if (state.health > 80 && state.hunger > 80 && state.happiness > 80 && state.energy > 80) {
+        if (!state.achievements.find(a => a.id === 'healthy_pet')?.isUnlocked) {
+          healthAchievements = state.achievements.map(a =>
+            a.id === 'healthy_pet' ? { ...a, isUnlocked: true } : a
+          );
+        }
+      }
+
       return {
         ...state,
         hunger: Math.max(0, state.hunger - 0.2),
@@ -77,6 +172,7 @@ function tamagotchiReducer(state: TamagotchiState, action: TamagotchiAction): Ta
         health: newHealth,
         isAlive: newHealth > 0,
         age: state.age + 1,
+        achievements: healthAchievements,
       };
     case 'SET_NAME':
       return {
