@@ -68,7 +68,10 @@ function tamagotchiReducer(state: TamagotchiState, action: TamagotchiAction): Ta
         evolution: getEvolutionStage(newSleepExp),
       };
     case 'UPDATE_STATUS':
-      const newHealth = Math.max(0, state.health - (state.hunger < 30 || state.happiness < 30 ? 0.5 : 0));
+      // Health decreases faster when hunger or happiness is low
+      const healthPenalty = (state.hunger < 30 ? 2 : 0) + (state.happiness < 30 ? 2 : 0);
+      const baseHealthLoss = 0.3; // Base health loss per second
+      const newHealth = Math.max(0, state.health - (baseHealthLoss + healthPenalty));
       return {
         ...state,
         hunger: Math.max(0, state.hunger - 0.2),
