@@ -3,6 +3,7 @@
 import React from 'react';
 import { useTamagotchi } from '@/context/TamagotchiContext';
 import { Evolution } from '@/types/tamagotchi';
+import TamagotchiCanvas from './TamagotchiCanvas';
 
 const SPRITES: Record<Evolution, string> = {
   egg: '🥚',
@@ -61,7 +62,6 @@ export default function Tamagotchi() {
     <div className="max-w-md mx-auto p-6 bg-white rounded-lg shadow-lg">
       <div className="text-center mb-6">
         <h1 className="text-2xl font-bold mb-2">{state.name}</h1>
-        <div className="text-6xl mb-4">{SPRITES[state.evolution]}</div>
         <div className="text-sm text-gray-600 mb-2">
           Stage: {state.evolution.charAt(0).toUpperCase() + state.evolution.slice(1)}
         </div>
@@ -82,6 +82,8 @@ export default function Tamagotchi() {
           </div>
         )}
       </div>
+
+      <TamagotchiCanvas />
 
       <div className="space-y-4 mb-6">
         <StatusBar value={state.health} label="Health" />
