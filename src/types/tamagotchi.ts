@@ -1,3 +1,7 @@
+export type Evolution = 'egg' | 'baby' | 'child' | 'teen' | 'adult';
+
+export type PetStatus = 'normal' | 'hungry' | 'sleepy' | 'unhappy';
+
 export interface TamagotchiState {
   name: string;
   hunger: number;
@@ -9,6 +13,8 @@ export interface TamagotchiState {
   lastFed: Date;
   lastPlayed: Date;
   lastSlept: Date;
+  evolution: Evolution;
+  experience: number;
 }
 
 export type TamagotchiAction = 
@@ -16,4 +22,5 @@ export type TamagotchiAction =
   | { type: 'PLAY' }
   | { type: 'SLEEP' }
   | { type: 'UPDATE_STATUS' }
-  | { type: 'SET_NAME'; payload: string }; 
+  | { type: 'SET_NAME'; payload: string }
+  | { type: 'GAIN_EXPERIENCE'; payload: number }; 
