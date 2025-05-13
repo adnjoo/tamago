@@ -20,6 +20,7 @@ interface Position {
   speed: number;
   scale: number;
   jumpOffset: number;
+  rotation: number;
 }
 
 interface Particle {
@@ -32,6 +33,7 @@ interface Particle {
   emoji: string;
   gravity?: number;
   bounce?: number;
+  scale?: number;
 }
 
 export default function TamagotchiCanvas() {
@@ -44,11 +46,14 @@ export default function TamagotchiCanvas() {
     speed: 2,
     scale: 1,
     jumpOffset: 0,
+    rotation: 0,
   });
   const particlesRef = useRef<Particle[]>([]);
   const isEatingRef = useRef(false);
   const isPlayingRef = useRef(false);
+  const isSleepingRef = useRef(false);
   const playTimeRef = useRef(0);
+  const sleepTimeRef = useRef(0);
   const { state } = useTamagotchi();
 
   // Pick a new random target position
@@ -113,6 +118,41 @@ export default function TamagotchiCanvas() {
     playTimeRef.current = 0;
   };
 
+  // Create sleep particles
+  const createSleepParticles = () => {
+    const pos = positionRef.current;
+    isSleepingRef.current = true;
+    sleepTimeRef.current = 0;
+
+    // Create initial Zzz particles
+    const createZzz = () => {
+      const particle: Particle = {
+        x: pos.x + 20,
+        y: pos.y - 20,
+        vx: 0.5,
+        vy: -1,
+        life: 180,
+        maxLife: 180,
+        emoji: '💤',
+        scale: 0.5,
+      };
+      particlesRef.current = [...particlesRef.current, particle];
+    };
+
+    createZzz();
+    // Create new Zzz every 60 frames
+    const interval = setInterval(() => {
+      if (isSleepingRef.current) {
+        createZzz();
+      } else {
+        clearInterval(interval);
+      }
+    }, 1000);
+
+    // Clear interval when component unmounts
+    return () => clearInterval(interval);
+  };
+
   // Animation loop
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -132,6 +172,7 @@ export default function TamagotchiCanvas() {
         speed: 2,
         scale: 1,
         jumpOffset: 0,
+        rotation: 0,
       };
     };
     updateCanvasSize();
@@ -146,7 +187,7 @@ export default function TamagotchiCanvas() {
       const pos = positionRef.current;
 
       // Update position
-      if (!isPlayingRef.current) {
+      if (!isPlayingRef.current && !isSleepingRef.current) {
         const dx = pos.targetX - pos.x;
         const dy = pos.targetY - pos.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
@@ -157,14 +198,24 @@ export default function TamagotchiCanvas() {
           pos.x += moveX;
           pos.y += moveY;
         }
-      } else {
+      } else if (isPlayingRef.current) {
         // Playing animation
         playTimeRef.current++;
-        if (playTimeRef.current < 120) { // 2 seconds of play animation
+        if (playTimeRef.current < 120) {
           pos.jumpOffset = -Math.abs(Math.sin(playTimeRef.current * 0.1) * 20);
         } else {
           pos.jumpOffset = 0;
           isPlayingRef.current = false;
+        }
+      } else if (isSleepingRef.current) {
+        // Sleeping animation
+        sleepTimeRef.current++;
+        if (sleepTimeRef.current < 180) { // 3 seconds of sleep animation
+          // Gentle rocking motion
+          pos.rotation = Math.sin(sleepTimeRef.current * 0.05) * 0.1;
+        } else {
+          pos.rotation = 0;
+          isSleepingRef.current = false;
         }
       }
 
@@ -184,7 +235,6 @@ export default function TamagotchiCanvas() {
         if (particle.gravity) {
           particle.vy += particle.gravity;
           
-          // Bounce off the ground
           if (particle.y > canvas.height - 20 && particle.bounce) {
             particle.y = canvas.height - 20;
             particle.vy = -particle.vy * particle.bounce;
@@ -195,7 +245,7 @@ export default function TamagotchiCanvas() {
 
         if (particle.life > 0) {
           ctx.globalAlpha = particle.life / particle.maxLife;
-          ctx.font = '20px Arial';
+          ctx.font = particle.scale ? `${20 * particle.scale}px Arial` : '20px Arial';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.fillText(particle.emoji, particle.x, particle.y);
@@ -205,15 +255,19 @@ export default function TamagotchiCanvas() {
       });
       ctx.globalAlpha = 1;
 
-      // Draw sprite
+      // Draw sprite with rotation
+      ctx.save();
+      ctx.translate(pos.x, pos.y + pos.jumpOffset);
+      ctx.rotate(pos.rotation);
       ctx.font = `${40 * pos.scale}px Arial`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(SPRITES[state.evolution], pos.x, pos.y + pos.jumpOffset);
+      ctx.fillText(SPRITES[state.evolution], 0, 0);
+      ctx.restore();
 
-      // Pick new target every 3-6 seconds when not playing
+      // Pick new target every 3-6 seconds when not playing or sleeping
       const now = Date.now();
-      if (!isPlayingRef.current && now - lastTargetUpdate > Math.random() * 3000 + 3000) {
+      if (!isPlayingRef.current && !isSleepingRef.current && now - lastTargetUpdate > Math.random() * 3000 + 3000) {
         pickNewTarget();
         lastTargetUpdate = now;
       }
@@ -242,6 +296,14 @@ export default function TamagotchiCanvas() {
       createPlayParticles();
     }
   }, [state.lastPlayed]);
+
+  // Listen for sleep events
+  useEffect(() => {
+    if (state.lastSlept) {
+      const cleanup = createSleepParticles();
+      return cleanup;
+    }
+  }, [state.lastSlept]);
 
   return (
     <canvas
